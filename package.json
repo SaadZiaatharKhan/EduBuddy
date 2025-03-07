@@ -1,0 +1,39 @@
+{
+  "name": "edubuddy",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@firebase/app": "^0.11.2",
+    "@firebase/firestore": "^4.7.9",
+    "@langchain/community": "^0.3.34",
+    "@langchain/core": "^0.3.42",
+    "@langchain/google-genai": "^0.1.10",
+    "@radix-ui/react-slot": "^1.1.2",
+    "@shadcn/ui": "^0.0.4",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "duck-duck-scrape": "^2.2.7",
+    "firebase": "^11.4.0",
+    "firebase-admin": "^12.7.0",
+    "lucide-react": "^0.477.0",
+    "next": "15.2.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tailwind-merge": "^3.0.2",
+    "tailwindcss-animate": "^1.0.7",
+    "youtubei.js": "^13.1.0"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
+    "eslint": "^9",
+    "eslint-config-next": "15.2.1",
+    "tailwindcss": "^4"
+  }
+}
