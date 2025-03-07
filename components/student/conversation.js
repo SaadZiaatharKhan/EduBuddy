@@ -5,10 +5,14 @@ import { structure } from '@/structure';
 import Image from 'next/image';
 
 const StudentConversation = ({ user }) => {
-  // Closed by default.
+  // Sidebar and selection states.
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [selectedChapter, setSelectedChapter] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Input and chat message states.
+  const [inputValue, setInputValue] = useState("");
+  const [chatMessages, setChatMessages] = useState([]);
 
   // Toggle sidebar open/closed without affecting chat area.
   const toggleSidebar = () => {
@@ -57,6 +61,43 @@ const StudentConversation = ({ user }) => {
   // Sidebar width (using 16rem for default and md can be adjusted if needed)
   const sidebarWidth = "16rem";
 
+  // Function to send the message input to the API.
+  const handleSend = async () => {
+    if (!inputValue.trim()) return;
+
+    // Create payload with selected subject, chapter, and input message.
+    const payload = {
+      subject: selectedSubject,
+      chapter: selectedChapter,
+      message: inputValue,
+    };
+
+    // Immediately add the user message to the chat area.
+    setChatMessages(prev => [...prev, { sender: "user", text: inputValue }]);
+
+    try {
+      const res = await fetch('/api/studentConversation', {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        // If the API returns a response message, add it to the chat.
+        if (data.response) {
+          setChatMessages(prev => [...prev, { sender: "api", text: data.response }]);
+        }
+      } else {
+        console.error("Failed to send message to API");
+      }
+    } catch (err) {
+      console.error("Error sending message", err);
+    }
+    // Clear input field after sending.
+    setInputValue("");
+  };
+
   return (
     <div className="relative flex flex-col p-4 m-4 gap-4 h-[80vh]">
       {/* CHAT AREA: remains full-sized */}
@@ -75,14 +116,45 @@ const StudentConversation = ({ user }) => {
         </div>
         {/* Chat Messages Area */}
         <div className="flex-grow p-2 overflow-y-auto">
-          <p className="text-gray-500">Chat area (messages will appear here)...</p>
+          {chatMessages.length === 0 ? (
+            <p className="text-gray-500">Chat area (messages will appear here)...</p>
+          ) : (
+            chatMessages.map((msg, index) => (
+              <div key={index} className={`mb-2 ${msg.sender === "user" ? "text-right" : "text-left"}`}>
+                <span className={msg.sender === "user" ? "bg-blue-100 p-2 rounded" : "bg-gray-100 p-2 rounded"}>
+                  {msg.text}
+                </span>
+              </div>
+            ))
+          )}
         </div>
-        {/* Input Text */}
-        <input
-          type="text"
-          placeholder="Search"
-          className="p-1 m-1 w-full h-10 rounded-2xl bg-slate-300"
-        />
+        {/* Input Area */}
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="Enter Your Query"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
+            className="w-full border border-gray-300 p-2 rounded mb-4 pr-10"
+          />
+          <button
+            onClick={handleSend}
+            className="absolute right-2 top-1/2 transform -translate-y-1/2 focus:outline-none"
+          >
+            <Image
+              src="/buttons/send-up-arrow.png"
+              height={25}
+              width={25}
+              alt="Send"
+            />
+          </button>
+        </div>
       </div>
 
       {/* SIDEBAR: Navigation for Subjects & Chapters */}
@@ -159,8 +231,6 @@ const StudentConversation = ({ user }) => {
       <button
         onClick={toggleSidebar}
         className="absolute top-1/2 transform -translate-y-1/2 z-50 transition-all duration-300 ease-in-out focus:outline-none"
-        // When sidebar is open, place toggle at the right edge of the sidebar;
-        // when closed, keep it visible at the left edge of the screen.
         style={{ left: sidebarOpen ? sidebarWidth : "0" }}
       >
         <Image
