@@ -1,3 +1,4 @@
+// /components/withAuth.js
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -15,22 +16,20 @@ const withAuth = (WrappedComponent, allowedRoles = []) => {
       const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
         if (currentUser) {
           try {
-            // Fetch additional user data from Firestore using the user's UID.
+            // Fetch additional user data from Firestore.
             const userDocRef = doc(db, "users", currentUser.uid);
             const userDocSnap = await getDoc(userDocRef);
             let combinedUser = currentUser;
             if (userDocSnap.exists()) {
               combinedUser = { ...currentUser, ...userDocSnap.data() };
             }
-            // If allowedRoles is specified, check if the user's role is allowed.
+            // Check allowed roles if specified.
             if (allowedRoles.length > 0 && !allowedRoles.includes(combinedUser.userType)) {
-              // If not allowed, redirect based on the user's role.
               if (combinedUser.userType === "student") {
                 router.push("/student");
               } else if (combinedUser.userType === "faculty") {
                 router.push("/faculty");
               } else {
-                // Optionally redirect to a generic unauthorized page.
                 router.push("/unauthorized");
               }
               return;

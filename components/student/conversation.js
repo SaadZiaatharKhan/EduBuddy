@@ -1,8 +1,19 @@
+// /pages/conversation.js
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from "react";
 import withAuth from "@/components/withAuth";
-import { structure } from '@/structure';
-import Image from 'next/image';
+import { structure } from "@/structure";
+import Image from "next/image";
+import { db } from "@/firebase/firebaseClient";
+import {
+  collection,
+  query,
+  orderBy,
+  limit,
+  getDocs,
+  addDoc,
+  serverTimestamp,
+} from "firebase/firestore";
 
 const StudentConversation = ({ user }) => {
   // Sidebar and selection states.
@@ -14,7 +25,27 @@ const StudentConversation = ({ user }) => {
   const [inputValue, setInputValue] = useState("");
   const [chatMessages, setChatMessages] = useState([]);
 
-  // Toggle sidebar open/closed without affecting chat area.
+  // Fetch chat history from Firestore for the user on mount.
+  useEffect(() => {
+    const fetchChatHistory = async () => {
+      try {
+        const messagesRef = collection(db, "conversations", user.uid, "messages");
+        const q = query(messagesRef, orderBy("timestamp", "desc"), limit(6));
+        const querySnapshot = await getDocs(q);
+        const messages = [];
+        querySnapshot.forEach((doc) => {
+          messages.push(doc.data());
+        });
+        // Reverse to show the oldest message first.
+        setChatMessages(messages.reverse());
+      } catch (error) {
+        console.error("Error fetching chat history: ", error);
+      }
+    };
+    fetchChatHistory();
+  }, [user.uid]);
+
+  // Toggle sidebar open/closed.
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
   };
@@ -58,35 +89,52 @@ const StudentConversation = ({ user }) => {
     }
   }
 
-  // Sidebar width (using 16rem for default and md can be adjusted if needed)
+  // Sidebar width.
   const sidebarWidth = "16rem";
 
-  // Function to send the message input to the API.
+  // Function to send the message to the API agent.
   const handleSend = async () => {
     if (!inputValue.trim()) return;
 
-    // Create payload with selected subject, chapter, and input message.
+    // Create payload with additional user id.
     const payload = {
       subject: selectedSubject,
       chapter: selectedChapter,
       message: inputValue,
+      uid: user.uid,
     };
 
-    // Immediately add the user message to the chat area.
-    setChatMessages(prev => [...prev, { sender: "user", text: inputValue }]);
+    // Immediately add the user message locally.
+    const newMessage = { sender: "user", text: inputValue, timestamp: serverTimestamp() };
+    setChatMessages((prev) => [...prev, newMessage]);
+
+    // Save the user message to Firestore.
+    try {
+      await addDoc(collection(db, "conversations", user.uid, "messages"), newMessage);
+    } catch (error) {
+      console.error("Error saving message to Firestore: ", error);
+    }
 
     try {
-      const res = await fetch('/api/studentConversation', {
+      const res = await fetch("/api/agentQuery", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      
+
       if (res.ok) {
         const data = await res.json();
-        // If the API returns a response message, add it to the chat.
         if (data.response) {
-          setChatMessages(prev => [...prev, { sender: "api", text: data.response }]);
+          const apiMessage = {
+            sender: "api",
+            text: data.response,
+            // Optionally include sources if provided by the agent.
+            sources: data.sources,
+            timestamp: serverTimestamp(),
+          };
+          setChatMessages((prev) => [...prev, apiMessage]);
+          // Save the API response to Firestore.
+          await addDoc(collection(db, "conversations", user.uid, "messages"), apiMessage);
         }
       } else {
         console.error("Failed to send message to API");
@@ -94,13 +142,13 @@ const StudentConversation = ({ user }) => {
     } catch (err) {
       console.error("Error sending message", err);
     }
-    // Clear input field after sending.
+    // Clear the input field.
     setInputValue("");
   };
 
   return (
     <div className="relative flex flex-col p-4 m-4 gap-4 h-[80vh]">
-      {/* CHAT AREA: remains full-sized */}
+      {/* CHAT AREA */}
       <div className="flex flex-col border-2 border-gray-300 rounded-lg p-2 h-full w-full">
         {/* Chat Header */}
         <div className="flex items-center justify-center border-b pb-2">
@@ -114,16 +162,30 @@ const StudentConversation = ({ user }) => {
             {headerText}
           </div>
         </div>
-        {/* Chat Messages Area */}
+        {/* Chat Messages */}
         <div className="flex-grow p-2 overflow-y-auto">
           {chatMessages.length === 0 ? (
             <p className="text-gray-500">Chat area (messages will appear here)...</p>
           ) : (
             chatMessages.map((msg, index) => (
-              <div key={index} className={`mb-2 ${msg.sender === "user" ? "text-right" : "text-left"}`}>
-                <span className={msg.sender === "user" ? "bg-blue-100 p-2 rounded" : "bg-gray-100 p-2 rounded"}>
+              <div
+                key={index}
+                className={`mb-2 ${msg.sender === "user" ? "text-right" : "text-left"}`}
+              >
+                <span
+                  className={
+                    msg.sender === "user"
+                      ? "bg-blue-100 p-2 rounded"
+                      : "bg-gray-100 p-2 rounded"
+                  }
+                >
                   {msg.text}
                 </span>
+                {msg.sources && (
+                  <div className="text-xs text-gray-600">
+                    Sources: {msg.sources.join(", ")}
+                  </div>
+                )}
               </div>
             ))
           )}
@@ -136,7 +198,7 @@ const StudentConversation = ({ user }) => {
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') {
+              if (e.key === "Enter") {
                 e.preventDefault();
                 handleSend();
               }
@@ -157,8 +219,8 @@ const StudentConversation = ({ user }) => {
         </div>
       </div>
 
-      {/* SIDEBAR: Navigation for Subjects & Chapters */}
-      <div 
+      {/* SIDEBAR: Subjects & Chapters */}
+      <div
         className="absolute top-0 left-0 h-full bg-slate-500 border-2 border-gray-300 rounded-r-lg overflow-y-auto transition-transform duration-300 ease-in-out"
         style={{
           width: sidebarWidth,
@@ -166,7 +228,6 @@ const StudentConversation = ({ user }) => {
         }}
       >
         <div className="p-4">
-          {/* Back arrow appears when a subject is selected */}
           {selectedSubject && (
             <button onClick={handleBack} className="mb-4 focus:outline-none">
               <Image
@@ -177,7 +238,6 @@ const StudentConversation = ({ user }) => {
               />
             </button>
           )}
-          {/* Sidebar Content */}
           {!selectedSubject && (
             <div className="flex flex-col gap-2">
               <button
@@ -227,7 +287,7 @@ const StudentConversation = ({ user }) => {
         </div>
       </div>
 
-      {/* TOGGLE BUTTON: Attached outside the sidebar */}
+      {/* TOGGLE SIDEBAR BUTTON */}
       <button
         onClick={toggleSidebar}
         className="absolute top-1/2 transform -translate-y-1/2 z-50 transition-all duration-300 ease-in-out focus:outline-none"
