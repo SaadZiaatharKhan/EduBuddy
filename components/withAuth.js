@@ -1,4 +1,3 @@
-// /components/withAuth.js
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -16,15 +15,30 @@ const withAuth = (WrappedComponent, allowedRoles = []) => {
       const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
         if (currentUser) {
           try {
-            // Fetch additional user data from Firestore.
             const userDocRef = doc(db, "users", currentUser.uid);
             const userDocSnap = await getDoc(userDocRef);
-            let combinedUser = currentUser;
+
+            // Create a base user object with only the necessary fields.
+            let combinedUser = {
+              uid: currentUser.uid,
+              email: currentUser.email,
+              displayName: currentUser.displayName || "",
+            };
+
             if (userDocSnap.exists()) {
-              combinedUser = { ...currentUser, ...userDocSnap.data() };
+              const data = userDocSnap.data();
+              // Explicitly pick only the expected properties.
+              combinedUser.firstName = data.firstName || "";
+              combinedUser.lastName = data.lastName || "";
+              combinedUser.grade = data.grade || "";
+              combinedUser.userType = data.userType || "";
             }
+
             // Check allowed roles if specified.
-            if (allowedRoles.length > 0 && !allowedRoles.includes(combinedUser.userType)) {
+            if (
+              allowedRoles.length > 0 &&
+              !allowedRoles.includes(combinedUser.userType)
+            ) {
               if (combinedUser.userType === "student") {
                 router.push("/student");
               } else if (combinedUser.userType === "faculty") {
@@ -37,7 +51,12 @@ const withAuth = (WrappedComponent, allowedRoles = []) => {
             setUser(combinedUser);
           } catch (error) {
             console.error("Error fetching user data:", error);
-            setUser(currentUser);
+            // Fallback to minimal user info
+            setUser({
+              uid: currentUser.uid,
+              email: currentUser.email,
+              displayName: currentUser.displayName || "",
+            });
           } finally {
             setLoading(false);
           }

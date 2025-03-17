@@ -17,18 +17,15 @@ function StudentPage({ user }) {
   const handleLogout = () => {
     signOut(auth)
       .then(() => {
-        // Sign-out successful. Redirect to homepage.
-        router.push("http://localhost:3000/");
+        router.push("/");
       })
       .catch((error) => {
-        // An error occurred during sign-out.
         console.error("Error during sign out:", error);
       });
   };
 
   return (
     <div className="w-screen h-screen bg-white flex flex-col p-0 overflow-hidden">
-      {/* Parent container is relative for absolute positioning */}
       <div className="max-h-[20vh] relative">
         <div className="p-4 flex w-full justify-between items-center">
           <div>
@@ -51,17 +48,46 @@ function StudentPage({ user }) {
             </button>
           </div>
         </div>
-        {/* Navigation panel with slide-in/out animation */}
         <div
-          className={`absolute top-15 p-2 m-2 bg-slate-400 text-white h-8 flex items-center md:gap-3 gap-[0.9px] rounded-sm text-[11px] md:text-base ${openNav ? "opacity-80" : "opacity-50"} transition-all duration-300 ease-in ${
+          className={`absolute top-15 p-2 m-2 bg-slate-400 text-white h-8 flex items-center md:gap-3 gap-[0.9px] rounded-sm text-[11px] md:text-base ${
+            openNav ? "opacity-80" : "opacity-50"
+          } transition-all duration-300 ease-in ${
             openNav ? "left-0" : "md:-left-96 -left-64"
           }`}
         >
-          <button className={`p-1 m-1 rounded-md ${navValue === "takeTest" ? "bg-blue-800" : "bg-slate-400"}`} onClick={() => setNavValue("takeTest")}>Take Test</button>
-          <button className={`p-1 m-1 rounded-md ${navValue === "conversation" ? "bg-blue-800" : "bg-slate-400"}`} onClick={() => setNavValue("conversation")}>Conversation</button>
-          <button className={`p-1 m-1 rounded-md ${navValue === "history" ? "bg-blue-800" : "bg-slate-400"}`} onClick={() => setNavValue("history")}>History</button>
-          <button className={`p-1 m-1 rounded-md ${navValue === "profile" ? "bg-blue-800" : "bg-slate-400"}`} onClick={() => setNavValue("profile")}>Profile</button>
-          <button className={`p-1 m-1`} onClick={() => setOpenNav(!openNav)}>
+          <button
+            className={`p-1 m-1 rounded-md ${
+              navValue === "takeTest" ? "bg-blue-800" : "bg-slate-400"
+            }`}
+            onClick={() => setNavValue("takeTest")}
+          >
+            Take Test
+          </button>
+          <button
+            className={`p-1 m-1 rounded-md ${
+              navValue === "conversation" ? "bg-blue-800" : "bg-slate-400"
+            }`}
+            onClick={() => setNavValue("conversation")}
+          >
+            Conversation
+          </button>
+          <button
+            className={`p-1 m-1 rounded-md ${
+              navValue === "history" ? "bg-blue-800" : "bg-slate-400"
+            }`}
+            onClick={() => setNavValue("history")}
+          >
+            History
+          </button>
+          <button
+            className={`p-1 m-1 rounded-md ${
+              navValue === "profile" ? "bg-blue-800" : "bg-slate-400"
+            }`}
+            onClick={() => setNavValue("profile")}
+          >
+            Profile
+          </button>
+          <button className="p-1 m-1" onClick={() => setOpenNav(!openNav)}>
             <Image
               src={`/buttons/${openNav ? "left" : "right"}-nav.png`}
               alt="navbar"

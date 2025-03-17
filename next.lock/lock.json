@@ -1,0 +1,4 @@
+{
+  "https://unpkg.com/chromadb-default-embed@2.14.0": { "resolved": "https://unpkg.com/chromadb-default-embed@2.14.0/dist/transformers.min.js", "integrity": "sha512-/xVPVN1UTMwx4P3hKr8j/Tun4wx6Xm5H0gd2iiAusGch/t1Oa0U6E3I+ZjB+BLz3LZDDDJ+VnXBS+qla0/v4bg==", "contentType": "application/javascript; charset=utf-8" },
+  "version": 1
+}
