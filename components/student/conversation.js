@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import withAuth from "@/components/withAuth";
 import { structure } from "@/structure";
 import Image from "next/image";
@@ -9,7 +9,7 @@ import {
   query,
   orderBy,
   limit,
-  getDocs,
+  onSnapshot,
   addDoc,
   serverTimestamp,
 } from "firebase/firestore";
@@ -17,36 +17,41 @@ import {
 const StudentConversation = ({ user }) => {
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [selectedChapter, setSelectedChapter] = useState(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false); // false = collapsed, true = open
   const [inputValue, setInputValue] = useState("");
   const [chatMessages, setChatMessages] = useState([]);
+  const messagesEndRef = useRef(null);
 
+  // Subscribe to real-time chat history updates from Firestore.
   useEffect(() => {
-    const fetchChatHistory = async () => {
-      try {
-        const messagesRef = collection(
-          db,
-          "conversations",
-          user.uid,
-          "messages"
-        );
-        const q = query(messagesRef, orderBy("timestamp", "desc"), limit(6));
-        const querySnapshot = await getDocs(q);
-        const messages = [];
-        querySnapshot.forEach((doc) => {
-          messages.push(doc.data());
-        });
-        setChatMessages(messages.reverse());
-      } catch (error) {
-        console.error("Error fetching chat history: ", error);
-      }
-    };
-    fetchChatHistory();
-  }, [user.uid]);
+    if (!user || !user.uid) return;
 
-  const toggleSidebar = () => {
-    setSidebarOpen(!sidebarOpen);
-  };
+    const messagesRef = collection(db, "conversations", user.uid, "messages");
+    // Create a query ordered by timestamp.
+    const q = query(messagesRef, orderBy("timestamp", "desc"), limit(20));
+    
+    // Subscribe to real-time updates.
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const messages = [];
+      querySnapshot.forEach((doc) => {
+        messages.push(doc.data());
+      });
+      // Reverse to show messages in chronological order.
+      setChatMessages(messages.reverse());
+    }, (error) => {
+      console.error("Error fetching chat history:", error);
+    });
+
+    // Clean up the subscription on unmount.
+    return () => unsubscribe();
+  }, [user]);
+
+  // Auto-scroll to bottom when chatMessages update.
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [chatMessages]);
 
   const handleBack = () => {
     if (selectedChapter) {
@@ -56,7 +61,8 @@ const StudentConversation = ({ user }) => {
     }
   };
 
-  const subjectsData = structure.grade[user.grade]?.subjects || {};
+  // Extract subjects and chapters from the structure.
+  const subjectsData = structure.grade[user?.grade]?.subjects || {};
   let chaptersData = {};
   if (selectedSubject) {
     const subjectObj = subjectsData[selectedSubject];
@@ -64,6 +70,7 @@ const StudentConversation = ({ user }) => {
       if (subjectObj.chapters) {
         chaptersData = subjectObj.chapters;
       } else {
+        // Merge nested chapters if necessary.
         Object.keys(subjectObj).forEach((subKey) => {
           if (subjectObj[subKey]?.chapters) {
             chaptersData = { ...chaptersData, ...subjectObj[subKey].chapters };
@@ -81,10 +88,9 @@ const StudentConversation = ({ user }) => {
     }
   }
 
-  const sidebarWidth = "16rem";
-
   const handleSend = async () => {
     if (!inputValue.trim()) return;
+    if (!user || !user.uid) return;
 
     const payload = {
       subject: selectedSubject,
@@ -94,21 +100,22 @@ const StudentConversation = ({ user }) => {
       grade: user.grade,
     };
 
+    // Create and display the user's message.
     const newMessage = {
       sender: "user",
       text: inputValue,
       timestamp: serverTimestamp(),
     };
+    // Optimistically update the UI.
     setChatMessages((prev) => [...prev, newMessage]);
+
     try {
-      await addDoc(
-        collection(db, "conversations", user.uid, "messages"),
-        newMessage
-      );
+      await addDoc(collection(db, "conversations", user.uid, "messages"), newMessage);
     } catch (error) {
-      console.error("Error saving message to Firestore: ", error);
+      console.error("Error saving message to Firestore:", error);
     }
 
+    // Send the query to your API.
     try {
       const res = await fetch("/api/agentQuery", {
         method: "POST",
@@ -118,27 +125,23 @@ const StudentConversation = ({ user }) => {
       if (res.ok) {
         const data = await res.json();
         let responseText = data.response;
+
+        // Convert objects to string if necessary.
         if (typeof responseText === "object" && responseText !== null) {
-          if (
-            "output" in responseText &&
-            typeof responseText.output === "string"
-          ) {
-            responseText = responseText.output;
-          } else {
-            responseText = JSON.stringify(responseText);
-          }
+          responseText =
+            responseText.output && typeof responseText.output === "string"
+              ? responseText.output
+              : JSON.stringify(responseText);
         }
         const apiMessage = {
           sender: "api",
-          text: responseText,
+          text: typeof responseText === "string" ? responseText : JSON.stringify(responseText),
           sources: data.sources,
           timestamp: serverTimestamp(),
         };
+        // Update the UI with the agent's response.
         setChatMessages((prev) => [...prev, apiMessage]);
-        await addDoc(
-          collection(db, "conversations", user.uid, "messages"),
-          apiMessage
-        );
+        await addDoc(collection(db, "conversations", user.uid, "messages"), apiMessage);
       } else {
         console.error("Failed to send message to API");
       }
@@ -149,12 +152,97 @@ const StudentConversation = ({ user }) => {
   };
 
   return (
-    <div className="relative flex flex-col p-4 m-4 gap-4 h-[80vh]">
-      {/* Chat Area */}
-      <div className="flex flex-col border-2 border-gray-300 rounded-lg p-2 h-full w-full">
-        <div className="flex items-center justify-center border-b pb-2">
+    <div className="flex h-[85vh] overflow-hidden">
+      {/* Sidebar */}
+      <div
+        className={`
+          bg-gray-800 text-white border-r border-gray-300 overflow-y-auto 
+          transition-all duration-300 ease-in-out p-4
+          ${sidebarOpen ? "w-64" : "w-0"}
+        `}
+        style={{ minWidth: sidebarOpen ? "16rem" : "0" }}
+      >
+        {sidebarOpen && (
+          <div className="flex flex-col gap-2">
+            {selectedSubject && (
+              <button
+                onClick={handleBack}
+                className="mb-2 focus:outline-none flex items-center bg-gray-700 px-3 py-2 rounded hover:bg-gray-600"
+              >
+                <Image
+                  src="/buttons/left-nav.png"
+                  height={20}
+                  width={20}
+                  alt="Back"
+                  className="mr-2"
+                />
+                <span>Back</span>
+              </button>
+            )}
+            {!selectedSubject && (
+              <>
+                <button
+                  className="py-2 px-3 rounded bg-blue-600 hover:bg-blue-500 transition-all w-full text-left"
+                  onClick={() => {
+                    setSelectedSubject(null);
+                    setSelectedChapter(null);
+                  }}
+                >
+                  Generalized
+                </button>
+                {Object.keys(subjectsData).map((subject) => (
+                  <button
+                    key={subject}
+                    className="py-2 px-3 rounded bg-gray-700 hover:bg-gray-600 transition-all w-full text-left"
+                    onClick={() => {
+                      setSelectedSubject(subject);
+                      setSelectedChapter(null);
+                    }}
+                  >
+                    {subject}
+                  </button>
+                ))}
+              </>
+            )}
+            {selectedSubject && (
+              <>
+                <div className="p-2 font-bold text-white bg-gray-900 rounded">
+                  {selectedSubject}
+                </div>
+                {Object.keys(chaptersData).map((chapterKey) => (
+                  <button
+                    key={chapterKey}
+                    className={`py-2 px-3 rounded transition-all w-full text-left ${
+                      selectedChapter === chaptersData[chapterKey]
+                        ? "bg-blue-500 hover:bg-blue-400"
+                        : "bg-gray-700 hover:bg-gray-600"
+                    }`}
+                    onClick={() => setSelectedChapter(chaptersData[chapterKey])}
+                  >
+                    {chaptersData[chapterKey]}
+                  </button>
+                ))}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Main Chat Section */}
+      <div className="flex flex-col flex-1 border border-gray-300 rounded-lg m-4 relative">
+        {/* Toggle Sidebar Button */}
+        <button
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          className="absolute top-3 left-4 bg-gray-700 text-white px-3 py-1 rounded 
+                     hover:bg-gray-600 transition-colors z-10"
+        >
+          {sidebarOpen ? "Hide Subjects and Chapters" : "Show Subjects and Chapters"}
+        </button>
+
+        {/* Header */}
+        <div className="flex items-center justify-center border-b py-2 bg-gray-100 rounded-t-lg">
           <div
-            className="font-bold cursor-pointer"
+            className="font-bold text-lg cursor-pointer"
             onClick={() => {
               setSelectedSubject(null);
               setSelectedChapter(null);
@@ -163,147 +251,72 @@ const StudentConversation = ({ user }) => {
             {headerText}
           </div>
         </div>
-        <div className="flex-grow p-2 overflow-y-auto">
-          {chatMessages.length === 0 ? (
-            <p className="text-gray-500">
-              Chat area (messages will appear here)...
-            </p>
-          ) : (
-            chatMessages.map((msg, index) => (
-              <div
-                key={index}
-                className={`mb-2 ${
-                  msg.sender === "user" ? "text-right" : "text-left"
-                }`}
-              >
-                <span
-                  className={
-                    msg.sender === "user"
-                      ? "bg-blue-100 p-2 rounded"
-                      : "bg-gray-100 p-2 rounded"
-                  }
-                >
-                  {msg.text}
-                </span>
-                {msg.sources && (
-                  <div className="text-xs text-gray-600">
-                    Sources: {msg.sources.join(", ")}
-                  </div>
-                )}
-              </div>
-            ))
-          )}
-        </div>
-        <div className="relative">
-          <input
-            type="text"
-            placeholder="Enter Your Query"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
-            className="w-full border border-gray-300 p-2 rounded mb-4 pr-10"
-          />
-          <button
-            onClick={handleSend}
-            className="absolute right-2 top-1/2 transform -translate-y-1/2 focus:outline-none"
-          >
-            <Image
-              src="/buttons/send-up-arrow.png"
-              height={25}
-              width={25}
-              alt="Send"
-            />
-          </button>
-        </div>
-      </div>
 
-      {/* Sidebar for navigation */}
-      <div
-        className="absolute top-0 left-0 h-full bg-slate-500 border-2 border-gray-300 rounded-r-lg overflow-y-auto transition-transform duration-300 ease-in-out"
-        style={{
-          width: sidebarWidth,
-          transform: sidebarOpen ? "translateX(0)" : `translateX(-${sidebarWidth})`,
-        }}
-      >
-        <div className="p-4">
-          {selectedSubject && (
-            <button onClick={handleBack} className="mb-4 focus:outline-none">
+        {/* Messages */}
+        <div className="flex-grow p-4 overflow-y-auto bg-white">
+          {chatMessages.length === 0 ? (
+            <p className="text-gray-500">Chat area (messages will appear here)...</p>
+          ) : (
+            chatMessages.map((msg, index) => {
+              const isUser = msg.sender === "user";
+              return (
+                <div
+                  key={index}
+                  className={`mb-4 flex ${isUser ? "justify-end" : "justify-start"}`}
+                >
+                  <div
+                    className={`rounded-xl p-3 max-w-[70%] shadow ${
+                      isUser ? "bg-blue-100 text-right" : "bg-gray-100 text-left"
+                    }`}
+                  >
+                    <p className="whitespace-pre-wrap">
+                      {typeof msg.text === "string" ? msg.text : JSON.stringify(msg.text)}
+                    </p>
+                    {msg.sources && msg.sources.length > 0 && (
+                      <div className="text-xs text-gray-500 mt-2">
+                        <strong>Sources:</strong> {msg.sources.join(", ")}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+          {/* Dummy div to automatically scroll to bottom */}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Input Area */}
+        <div className="border-t border-gray-300 p-3 bg-gray-50 rounded-b-lg">
+          <div className="relative flex items-center">
+            <input
+              type="text"
+              placeholder="Enter your query..."
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              className="w-full border border-gray-300 rounded-full py-2 px-4 pr-12 
+                         focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+            <button
+              onClick={handleSend}
+              className="absolute right-3 text-blue-600 hover:text-blue-800 focus:outline-none"
+            >
               <Image
-                src="/buttons/left-nav.png"
-                height={30}
-                width={30}
-                alt="Back"
+                src="/buttons/send-up-arrow.png"
+                height={25}
+                width={25}
+                alt="Send"
               />
             </button>
-          )}
-          {!selectedSubject && (
-            <div className="flex flex-col gap-2">
-              <button
-                className="p-2 rounded shadow w-full text-left bg-blue-500 text-white transition-all duration-300 ease-in-out"
-                onClick={() => {
-                  setSelectedSubject(null);
-                  setSelectedChapter(null);
-                }}
-              >
-                Generalized
-              </button>
-              {Object.keys(subjectsData).map((subject) => (
-                <button
-                  key={subject}
-                  className="p-2 rounded shadow w-full text-left bg-white text-black transition-all duration-300 ease-in-out"
-                  onClick={() => {
-                    setSelectedSubject(subject);
-                    setSelectedChapter(null);
-                  }}
-                >
-                  {subject}
-                </button>
-              ))}
-            </div>
-          )}
-          {selectedSubject && (
-            <div className="flex flex-col gap-2">
-              <div className="p-2 font-bold text-white bg-slate-700 rounded transition-all duration-300 ease-in-out">
-                {selectedSubject}
-              </div>
-              {Object.keys(chaptersData).map((chapterKey) => (
-                <button
-                  key={chapterKey}
-                  className={`p-2 rounded shadow w-full text-left transition-all duration-300 ease-in-out ${
-                    selectedChapter === chaptersData[chapterKey]
-                      ? "bg-blue-500 text-white"
-                      : "bg-white text-black"
-                  }`}
-                  onClick={() => setSelectedChapter(chaptersData[chapterKey])}
-                >
-                  {chaptersData[chapterKey]}
-                </button>
-              ))}
-            </div>
-          )}
+          </div>
         </div>
       </div>
-      <button
-        onClick={toggleSidebar}
-        className="absolute top-1/2 transform -translate-y-1/2 z-50 transition-all duration-300 ease-in-out focus:outline-none"
-        style={{ left: sidebarOpen ? sidebarWidth : "0" }}
-      >
-        <Image
-          src={
-            sidebarOpen
-              ? "/buttons/sidebar-left.png"
-              : "/buttons/sidebar-right.png"
-          }
-          height={30}
-          width={30}
-          alt={sidebarOpen ? "Close Sidebar" : "Open Sidebar"}
-        />
-      </button>
     </div>
   );
 };

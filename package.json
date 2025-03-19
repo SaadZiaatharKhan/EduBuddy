@@ -16,6 +16,8 @@
     "@langchain/core": "^0.3.42",
     "@langchain/google-genai": "^0.1.10",
     "@radix-ui/react-slot": "^1.1.2",
+    "@react-three/drei": "^10.0.4",
+    "@react-three/fiber": "^9.1.0",
     "@shadcn/ui": "^0.0.4",
     "@xenova/transformers": "^2.17.2",
     "chromadb": "^1.10.5",
@@ -25,12 +27,14 @@
     "firebase": "^11.4.0",
     "firebase-admin": "^12.7.0",
     "google-gax": "^4.4.1",
+    "leva": "^0.10.0",
     "lucide-react": "^0.477.0",
     "next": "15.2.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tailwind-merge": "^3.0.2",
     "tailwindcss-animate": "^1.0.7",
+    "three": "^0.174.0",
     "youtubei.js": "^13.1.0"
   },
   "devDependencies": {
