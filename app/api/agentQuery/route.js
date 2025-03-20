@@ -1,13 +1,11 @@
-// /app/api/agentQuery/route.js
+// File: /app/api/agentQuery/route.js
 import { NextResponse } from "next/server";
 
 export async function POST(request) {
   try {
-    // Expect payload: { subject, chapter, message, grade }
     const { subject, chapter, message, grade } = await request.json();
-    console.log("Received data:", { subject, chapter, message, grade });
+    console.log("Received teaching query:", { subject, chapter, message, grade });
     
-    // Forward the request to the Python backend.
     const pythonResponse = await fetch("http://localhost:8000/query", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -18,7 +16,6 @@ export async function POST(request) {
     }
     const pythonData = await pythonResponse.json();
     
-    // Extract the final output.
     let finalOutput = pythonData.agent_response;
     if (typeof finalOutput === "object" && finalOutput !== null) {
       if ("output" in finalOutput && typeof finalOutput.output === "string") {
@@ -28,9 +25,9 @@ export async function POST(request) {
       }
     }
     
-    return NextResponse.json({ response: finalOutput, sources: [] });
+    return NextResponse.json({ response: finalOutput, sources: pythonData.vector_results });
   } catch (error) {
-    console.error("Error processing the request:", error);
+    console.error("Error processing the teaching query:", error);
     return NextResponse.json(
       { error: "Failed to process the request." },
       { status: 500 }

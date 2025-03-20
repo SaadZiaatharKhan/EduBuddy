@@ -1,14 +1,6 @@
 "use client";
 import { useAITeacher } from "@/hooks/useAITeacher";
-import {
-  CameraControls,
-  Environment,
-  Float,
-  Gltf,
-  Html,
-  Loader,
-  useGLTF,
-} from "@react-three/drei";
+import { CameraControls, Environment, Float, Gltf, Html, Loader, useGLTF } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import { Leva, button, useControls } from "leva";
 import { Suspense, useEffect, useRef } from "react";
@@ -20,15 +12,9 @@ import { TypingBox } from "./TypingBox";
 
 const itemPlacement = {
   default: {
-    classroom: {
-      position: [0.2, -1.7, -2],
-    },
-    teacher: {
-      position: [-1, -1.7, -3],
-    },
-    board: {
-      position: [0.45, 0.382, -6],
-    },
+    classroom: { position: [0.2, -1.7, -2] },
+    teacher: { position: [-1, -1.7, -3] },
+    board: { position: [0.45, 0.382, -6] },
   },
   alternative: {
     classroom: {
@@ -52,37 +38,18 @@ export const Experience = () => {
       </div>
       <Leva hidden />
       <Loader />
-      <Canvas
-        camera={{
-          position: [0, 0, 0.0001],
-        }}
-      >
+      <Canvas camera={{ position: [0, 0, 0.0001] }}>
         <CameraManager />
-
         <Suspense>
           <Float speed={0.5} floatIntensity={0.2} rotationIntensity={0.1}>
-            <Html
-              transform
-              {...itemPlacement[classroom].board}
-              distanceFactor={1}
-            >
+            <Html transform {...itemPlacement[classroom].board} distanceFactor={1}>
               <MessagesList />
               <BoardSettings />
             </Html>
             <Environment preset="sunset" />
             <ambientLight intensity={0.8} color="pink" />
-
-            <Gltf
-              src={`/models/classroom_${classroom}.glb`}
-              {...itemPlacement[classroom].classroom}
-            />
-            <Teacher
-              teacher={teacher}
-              key={teacher}
-              {...itemPlacement[classroom].teacher}
-              scale={1.5}
-              rotation-y={degToRad(20)}
-            />
+            <Gltf src={`/models/classroom_${classroom}.glb`} {...itemPlacement[classroom].classroom} />
+            <Teacher teacher={teacher} key={teacher} {...itemPlacement[classroom].teacher} scale={1.5} rotation-y={degToRad(20)} />
           </Float>
         </Suspense>
       </Canvas>
@@ -92,9 +59,7 @@ export const Experience = () => {
 
 const CAMERA_POSITIONS = {
   default: [0, 6.123233995736766e-21, 0.0001],
-  loading: [
-    0.00002621880610890309, 0.00000515037441056466, 0.00009636414192870058,
-  ],
+  loading: [0.00002621880610890309, 0.00000515037441056466, 0.00009636414192870058],
   speaking: [0, -1.6481333940859815e-7, 0.00009999846226827279],
 };
 
@@ -132,16 +97,10 @@ const CameraManager = () => {
       ref={controls}
       minZoom={1}
       maxZoom={3}
-      polarRotateSpeed={-0.3} // REVERSE FOR NATURAL EFFECT
-      azimuthRotateSpeed={-0.3} // REVERSE FOR NATURAL EFFECT
-      mouseButtons={{
-        left: 1, //ACTION.ROTATE
-        wheel: 16, //ACTION.ZOOM
-      }}
-      touches={{
-        one: 32, //ACTION.TOUCH_ROTATE
-        two: 512, //ACTION.TOUCH_ZOOM
-      }}
+      polarRotateSpeed={-0.3}
+      azimuthRotateSpeed={-0.3}
+      mouseButtons={{ left: 1, wheel: 16 }}
+      touches={{ one: 32, two: 512 }}
     />
   );
 };

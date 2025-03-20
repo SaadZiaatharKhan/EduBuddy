@@ -17,7 +17,7 @@ import {
 const StudentConversation = ({ user }) => {
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [selectedChapter, setSelectedChapter] = useState(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false); // false = collapsed, true = open
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [chatMessages, setChatMessages] = useState([]);
   const messagesEndRef = useRef(null);
@@ -25,28 +25,25 @@ const StudentConversation = ({ user }) => {
   // Subscribe to real-time chat history updates from Firestore.
   useEffect(() => {
     if (!user || !user.uid) return;
-
     const messagesRef = collection(db, "conversations", user.uid, "messages");
-    // Create a query ordered by timestamp.
     const q = query(messagesRef, orderBy("timestamp", "desc"), limit(20));
-    
-    // Subscribe to real-time updates.
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const messages = [];
-      querySnapshot.forEach((doc) => {
-        messages.push(doc.data());
-      });
-      // Reverse to show messages in chronological order.
-      setChatMessages(messages.reverse());
-    }, (error) => {
-      console.error("Error fetching chat history:", error);
-    });
-
-    // Clean up the subscription on unmount.
+    const unsubscribe = onSnapshot(
+      q,
+      (querySnapshot) => {
+        const messages = [];
+        querySnapshot.forEach((doc) => {
+          messages.push(doc.data());
+        });
+        setChatMessages(messages.reverse());
+      },
+      (error) => {
+        console.error("Error fetching chat history:", error);
+      }
+    );
     return () => unsubscribe();
   }, [user]);
 
-  // Auto-scroll to bottom when chatMessages update.
+  // Auto-scroll to bottom when messages update.
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
@@ -70,7 +67,6 @@ const StudentConversation = ({ user }) => {
       if (subjectObj.chapters) {
         chaptersData = subjectObj.chapters;
       } else {
-        // Merge nested chapters if necessary.
         Object.keys(subjectObj).forEach((subKey) => {
           if (subjectObj[subKey]?.chapters) {
             chaptersData = { ...chaptersData, ...subjectObj[subKey].chapters };
@@ -80,7 +76,8 @@ const StudentConversation = ({ user }) => {
     }
   }
 
-  let headerText = "Generalized";
+  // Header text: initially "EduBuddy", then subject/chapter if selected.
+  let headerText = "EduBuddy";
   if (selectedSubject) {
     headerText = selectedSubject;
     if (selectedChapter) {
@@ -106,16 +103,18 @@ const StudentConversation = ({ user }) => {
       text: inputValue,
       timestamp: serverTimestamp(),
     };
-    // Optimistically update the UI.
     setChatMessages((prev) => [...prev, newMessage]);
 
     try {
-      await addDoc(collection(db, "conversations", user.uid, "messages"), newMessage);
+      await addDoc(
+        collection(db, "conversations", user.uid, "messages"),
+        newMessage
+      );
     } catch (error) {
       console.error("Error saving message to Firestore:", error);
     }
 
-    // Send the query to your API.
+    // Send the query to the /agentQuery API.
     try {
       const res = await fetch("/api/agentQuery", {
         method: "POST",
@@ -125,23 +124,26 @@ const StudentConversation = ({ user }) => {
       if (res.ok) {
         const data = await res.json();
         let responseText = data.response;
-
-        // Convert objects to string if necessary.
-        if (typeof responseText === "object" && responseText !== null) {
+        if (
+          typeof responseText === "object" &&
+          responseText !== null
+        ) {
           responseText =
             responseText.output && typeof responseText.output === "string"
               ? responseText.output
               : JSON.stringify(responseText);
         }
         const apiMessage = {
-          sender: "api",
+          sender: "agent",
           text: typeof responseText === "string" ? responseText : JSON.stringify(responseText),
           sources: data.sources,
           timestamp: serverTimestamp(),
         };
-        // Update the UI with the agent's response.
         setChatMessages((prev) => [...prev, apiMessage]);
-        await addDoc(collection(db, "conversations", user.uid, "messages"), apiMessage);
+        await addDoc(
+          collection(db, "conversations", user.uid, "messages"),
+          apiMessage
+        );
       } else {
         console.error("Failed to send message to API");
       }
@@ -153,13 +155,11 @@ const StudentConversation = ({ user }) => {
 
   return (
     <div className="flex h-[85vh] overflow-hidden">
-      {/* Sidebar */}
+      {/* Sidebar for subjects and chapters */}
       <div
-        className={`
-          bg-gray-800 text-white border-r border-gray-300 overflow-y-auto 
-          transition-all duration-300 ease-in-out p-4
-          ${sidebarOpen ? "w-64" : "w-0"}
-        `}
+        className={`bg-gray-800 text-white border-r border-gray-300 overflow-y-auto transition-all duration-300 ease-in-out p-4 ${
+          sidebarOpen ? "w-64" : "w-0"
+        }`}
         style={{ minWidth: sidebarOpen ? "16rem" : "0" }}
       >
         {sidebarOpen && (
@@ -188,7 +188,7 @@ const StudentConversation = ({ user }) => {
                     setSelectedChapter(null);
                   }}
                 >
-                  Generalized
+                  EduBuddy
                 </button>
                 {Object.keys(subjectsData).map((subject) => (
                   <button
@@ -230,16 +230,12 @@ const StudentConversation = ({ user }) => {
 
       {/* Main Chat Section */}
       <div className="flex flex-col flex-1 border border-gray-300 rounded-lg m-4 relative">
-        {/* Toggle Sidebar Button */}
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="absolute top-3 left-4 bg-gray-700 text-white px-3 py-1 rounded 
-                     hover:bg-gray-600 transition-colors z-10"
+          className="absolute top-3 left-4 bg-gray-700 text-white px-3 py-1 rounded hover:bg-gray-600 transition-colors z-10"
         >
-          {sidebarOpen ? "Hide Subjects and Chapters" : "Show Subjects and Chapters"}
+          {sidebarOpen ? "Hide Subjects" : "Show Subjects"}
         </button>
-
-        {/* Header */}
         <div className="flex items-center justify-center border-b py-2 bg-gray-100 rounded-t-lg">
           <div
             className="font-bold text-lg cursor-pointer"
@@ -251,8 +247,6 @@ const StudentConversation = ({ user }) => {
             {headerText}
           </div>
         </div>
-
-        {/* Messages */}
         <div className="flex-grow p-4 overflow-y-auto bg-white">
           {chatMessages.length === 0 ? (
             <p className="text-gray-500">Chat area (messages will appear here)...</p>
@@ -282,11 +276,8 @@ const StudentConversation = ({ user }) => {
               );
             })
           )}
-          {/* Dummy div to automatically scroll to bottom */}
           <div ref={messagesEndRef} />
         </div>
-
-        {/* Input Area */}
         <div className="border-t border-gray-300 p-3 bg-gray-50 rounded-b-lg">
           <div className="relative flex items-center">
             <input
@@ -300,8 +291,7 @@ const StudentConversation = ({ user }) => {
                   handleSend();
                 }
               }}
-              className="w-full border border-gray-300 rounded-full py-2 px-4 pr-12 
-                         focus:outline-none focus:ring-2 focus:ring-blue-400"
+              className="w-full border border-gray-300 rounded-full py-2 px-4 pr-12 focus:outline-none focus:ring-2 focus:ring-blue-400"
             />
             <button
               onClick={handleSend}

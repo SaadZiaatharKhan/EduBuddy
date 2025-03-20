@@ -22,54 +22,63 @@ export const useAITeacher = create((set, get) => ({
     }));
   },
   loading: false,
-  furigana: true,
-  setFurigana: (furigana) => {
-    set(() => ({
-      furigana,
-    }));
-  },
-  english: true,
-  setEnglish: (english) => {
-    set(() => ({
-      english,
-    }));
-  },
-  speech: "formal",
-  setSpeech: (speech) => {
-    set(() => ({
-      speech,
-    }));
-  },
-  askAI: async (question) => {
-    if (!question) {
-      return;
-    }
-    const message = {
-      question,
+  // Removed unused properties for EduBuddy
+
+  // Updated askAI: now uses /agentQuery, and saves the response as an "agent" message.
+  askAI: async (question, extraPayload = {}) => {
+    if (!question) return;
+    
+    // Create and store the user's message.
+    const userMessage = {
+      sender: "user",
+      text: question,
       id: get().messages.length,
     };
-    set(() => ({
+    set((state) => ({
+      messages: [...state.messages, userMessage],
       loading: true,
     }));
-
-    const speech = get().speech;
-
-    // Ask AI
-    const res = await fetch(`/api/ai?question=${question}&speech=${speech}`);
-    const data = await res.json();
-    message.answer = data;
-    message.speech = speech;
-
-    set(() => ({
-      currentMessage: message,
-    }));
-
-    set((state) => ({
-      messages: [...state.messages, message],
-      loading: false,
-    }));
-    get().playMessage(message);
+    
+    try {
+      const res = await fetch("/api/agentQuery", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: question,
+          ...extraPayload,
+        }),
+      });
+      if (!res.ok) {
+        throw new Error("API Error");
+      }
+      const data = await res.json();
+      const agentResponse = data.response;
+      
+      // Create a new message for the agent response.
+      const agentMessage = {
+        sender: "agent",
+        text:
+          typeof agentResponse === "string"
+            ? agentResponse
+            : JSON.stringify(agentResponse),
+        sources: data.sources,
+        id: get().messages.length,
+      };
+      
+      set((state) => ({
+        messages: [...state.messages, agentMessage],
+        loading: false,
+        currentMessage: agentMessage,
+      }));
+      
+      get().playMessage(agentMessage);
+    } catch (error) {
+      console.error("Error calling agentQuery", error);
+      set(() => ({ loading: false }));
+    }
   },
+
+  // Updated playMessage: uses /api/tts with the agent message's text.
   playMessage: async (message) => {
     set(() => ({
       currentMessage: message,
@@ -79,18 +88,14 @@ export const useAITeacher = create((set, get) => ({
       set(() => ({
         loading: true,
       }));
-      // Get TTS
+      // Get TTS using the text from message.text
       const audioRes = await fetch(
-        `/api/tts?teacher=${get().teacher}&text=${message.answer.japanese
-          .map((word) => word.word)
-          .join(" ")}`
+        `/api/tts?text=${encodeURIComponent(message.text)}`
       );
       const audio = await audioRes.blob();
-      const visemes = JSON.parse(await audioRes.headers.get("visemes"));
       const audioUrl = URL.createObjectURL(audio);
       const audioPlayer = new Audio(audioUrl);
 
-      message.visemes = visemes;
       message.audioPlayer = audioPlayer;
       message.audioPlayer.onended = () => {
         set(() => ({
@@ -99,12 +104,9 @@ export const useAITeacher = create((set, get) => ({
       };
       set(() => ({
         loading: false,
-        messages: get().messages.map((m) => {
-          if (m.id === message.id) {
-            return message;
-          }
-          return m;
-        }),
+        messages: get().messages.map((m) =>
+          m.id === message.id ? message : m
+        ),
       }));
     }
 
@@ -112,7 +114,9 @@ export const useAITeacher = create((set, get) => ({
     message.audioPlayer.play();
   },
   stopMessage: (message) => {
-    message.audioPlayer.pause();
+    if (message.audioPlayer) {
+      message.audioPlayer.pause();
+    }
     set(() => ({
       currentMessage: null,
     }));

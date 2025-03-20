@@ -1,58 +1,29 @@
-import * as sdk from "microsoft-cognitiveservices-speech-sdk";
-import { PassThrough } from "stream";
+// File: /app/api/tts/route.js
+import { NextResponse } from "next/server";
 
-export async function GET(req) {
-  // WARNING: Do not expose your keys
-  // WARNING: If you host publicly your project, add an authentication layer to limit the consumption of Azure resources
-
-  const speechConfig = sdk.SpeechConfig.fromSubscription(
-    process.env["SPEECH_KEY"],
-    process.env["SPEECH_REGION"]
-  );
-
-  // https://learn.microsoft.com/en-us/azure/ai-services/speech-service/language-support?tabs=tts
-  const teacher = req.nextUrl.searchParams.get("teacher") || "Nanami";
-  speechConfig.speechSynthesisVoiceName = `ja-JP-${teacher}Neural`;
-
-  const speechSynthesizer = new sdk.SpeechSynthesizer(speechConfig);
-  const visemes = [];
-  speechSynthesizer.visemeReceived = function (s, e) {
-    // console.log(
-    //   "(Viseme), Audio offset: " +
-    //     e.audioOffset / 10000 +
-    //     "ms. Viseme ID: " +
-    //     e.visemeId
-    // );
-    visemes.push([e.audioOffset / 10000, e.visemeId]);
-  };
-  const audioStream = await new Promise((resolve, reject) => {
-    speechSynthesizer.speakTextAsync(
-      req.nextUrl.searchParams.get("text") ||
-        "I'm excited to try text to speech",
-      (result) => {
-        const { audioData } = result;
-
-        speechSynthesizer.close();
-
-        // convert arrayBuffer to stream
-        const bufferStream = new PassThrough();
-        bufferStream.end(Buffer.from(audioData));
-        resolve(bufferStream);
-      },
-      (error) => {
-        console.log(error);
-        speechSynthesizer.close();
-        reject(error);
+export async function GET(request) {
+  try {
+    const text = request.nextUrl.searchParams.get("text") || "Hello, how can I help you?";
+    const pythonResponse = await fetch(`http://localhost:8000/tts?text=${encodeURIComponent(text)}`, {
+      method: "GET",
+    });
+    if (!pythonResponse.ok) {
+      throw new Error("Python TTS endpoint returned an error");
+    }
+    const audioData = await pythonResponse.arrayBuffer();
+    
+    return new NextResponse(audioData, {
+      status: 200,
+      headers: {
+        "Content-Type": "audio/mp3",
+        "Content-Disposition": "inline; filename=tts.mp3"
       }
+    });
+  } catch (error) {
+    console.error("Error processing TTS request:", error);
+    return NextResponse.json(
+      { error: "Failed to process the TTS request." },
+      { status: 500 }
     );
-  });
-  const response = new Response(audioStream, {
-    headers: {
-      "Content-Type": "audio/mpeg",
-      "Content-Disposition": `inline; filename=tts.mp3`,
-      Visemes: JSON.stringify(visemes),
-    },
-  });
-  // audioStream.pipe(response);
-  return response;
+  }
 }
