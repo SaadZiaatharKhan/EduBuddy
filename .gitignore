@@ -41,4 +41,6 @@ yarn-error.log*
 next-env.d.ts
 
 # vector database
-vector_db/
+VectorDB/Textbooks
+VectorDB/.venv
+VectorDB/vector_db
